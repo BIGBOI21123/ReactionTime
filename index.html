@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reaction Time Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles if needed, though Tailwind is preferred */
+        body {
+            font-family: 'Inter', sans-serif; /* Tailwind default font */
+        }
+        /* Add a subtle transition for background color changes */
+        #reaction-box {
+            transition: background-color 0.15s ease-in-out;
+        }
+        /* Prevent text selection during clicks */
+        .no-select {
+          -webkit-user-select: none; /* Safari */
+          -moz-user-select: none; /* Firefox */
+          -ms-user-select: none; /* IE/Edge */
+          user-select: none; /* Standard */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="bg-white p-6 md:p-8 rounded-lg shadow-xl text-center max-w-md w-full">
+        <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-4">Reaction Time Test</h1>
+        <p class="text-gray-600 mb-6">Instructions: Click the box below as soon as it turns <span class="text-green-500 font-semibold">green</span>. Complete 10 trials.</p>
+
+        <div id="reaction-box" class="w-full h-48 md:h-64 bg-blue-500 rounded-lg flex items-center justify-center cursor-pointer mb-6 no-select">
+            <p id="status" class="text-white text-lg md:text-xl font-semibold px-4">Click here to start the test</p>
+        </div>
+
+        <div id="results" class="text-left space-y-2">
+            <p class="text-gray-700">Trials Completed: <span id="trial-count" class="font-semibold">0</span> / 10</p>
+            <p class="text-gray-700">Last Reaction Time: <span id="last-time" class="font-semibold">-</span> ms</p>
+            <p id="average-result" class="text-blue-600 text-lg font-bold mt-4"></p> <p id="message" class="text-red-500 font-semibold h-6"></p> </div>
+    </div>
+
+    <script>
+        // Get references to HTML elements
+        const reactionBox = document.getElementById('reaction-box');
+        const statusText = document.getElementById('status');
+        const trialCountDisplay = document.getElementById('trial-count');
+        const lastTimeDisplay = document.getElementById('last-time');
+        const averageResultDisplay = document.getElementById('average-result');
+        const messageDisplay = document.getElementById('message');
+
+        // --- State Variables ---
+        let startTime = 0; // Time when the box turns green
+        let timeoutId = null; // Stores the ID of the setTimeout timer
+        let reactionTimes = []; // Array to store times for each trial
+        let trialsCompleted = 0; // Counter for completed trials
+        const maxTrials = 10; // Total number of trials required
+        let currentState = 'initial'; // Possible states: 'initial', 'waiting', 'ready', 'active', 'finished'
+
+        // --- Functions ---
+
+        /**
+         * Updates the appearance and text of the reaction box based on the current state.
+         * @param {string} state - The new state ('initial', 'waiting', 'ready', 'active', 'finished').
+         * @param {string} text - The text to display inside the box.
+         */
+        function updateBox(state, text) {
+            // Remove previous state classes
+            reactionBox.classList.remove('bg-blue-500', 'bg-red-500', 'bg-green-500', 'bg-gray-500');
+            statusText.textContent = text;
+            messageDisplay.textContent = ''; // Clear previous messages
+
+            // Apply new state class
+            switch (state) {
+                case 'initial':
+                case 'waiting': // Waiting for user to click to start/continue
+                    reactionBox.classList.add('bg-blue-500');
+                    break;
+                case 'ready': // Waiting for the random delay to end (box is red)
+                    reactionBox.classList.add('bg-red-500');
+                    break;
+                case 'active': // Box is green, waiting for the user's click
+                    reactionBox.classList.add('bg-green-500');
+                    break;
+                case 'finished': // Test completed
+                    reactionBox.classList.add('bg-gray-500');
+                    reactionBox.style.cursor = 'default'; // Change cursor when finished
+                    break;
+            }
+            currentState = state; // Update the global state variable
+        }
+
+        /**
+         * Resets the test to its initial state.
+         */
+        function resetTest() {
+            clearTimeout(timeoutId); // Clear any pending timer
+            reactionTimes = [];
+            trialsCompleted = 0;
+            startTime = 0;
+            updateBox('initial', 'Click here to start the test');
+            trialCountDisplay.textContent = trialsCompleted;
+            lastTimeDisplay.textContent = '-';
+            averageResultDisplay.textContent = '';
+            messageDisplay.textContent = '';
+            reactionBox.style.cursor = 'pointer'; // Ensure cursor is pointer on reset
+        }
+
+        /**
+         * Schedules the box to turn green after a random delay.
+         */
+        function scheduleStimulus() {
+            if (currentState !== 'waiting') return; // Only schedule if in the correct state
+
+            updateBox('ready', 'Wait for green...'); // Turn box red
+
+            // Random delay between 1000ms (1s) and 4000ms (4s)
+            const randomDelay = Math.random() * 3000 + 1000;
+
+            timeoutId = setTimeout(() => {
+                // Double-check state in case user clicked too early and state changed
+                if (currentState === 'ready') {
+                    updateBox('active', 'Click NOW!'); // Turn box green
+                    startTime = Date.now(); // Record the time when the box turned green
+                }
+            }, randomDelay);
+        }
+
+        /**
+         * Calculates and displays the final average reaction time.
+         */
+        function finishTest() {
+            const sum = reactionTimes.reduce((acc, time) => acc + time, 0);
+            const average = sum / reactionTimes.length;
+
+            updateBox('finished', `Test Finished! Click to restart.`);
+            averageResultDisplay.textContent = `Average Time: ${average.toFixed(1)} ms`; // Show average
+        }
+
+        // --- Event Listener ---
+
+        reactionBox.addEventListener('click', () => {
+            // --- Handle clicks based on the current state ---
+
+            // 1. Initial click to start the very first trial
+            if (currentState === 'initial') {
+                updateBox('waiting', 'Click to start Trial 1'); // Move to waiting state
+                // The next click will trigger the 'waiting' state logic below
+                return;
+            }
+
+            // 2. Click during 'waiting' state (to start a trial)
+            if (currentState === 'waiting') {
+                 // Check if it's a click after "Too soon!" message
+                 if (messageDisplay.textContent.includes('Too soon!')) {
+                     messageDisplay.textContent = ''; // Clear the message
+                 }
+                scheduleStimulus(); // Start the timer for the green light
+                return;
+            }
+
+            // 3. Click when box is red ('ready' state - clicked too early)
+            if (currentState === 'ready') {
+                clearTimeout(timeoutId); // Cancel the scheduled green light
+                messageDisplay.textContent = 'Too soon! Click box to try again.';
+                updateBox('waiting', 'Too soon! Click to try again.'); // Go back to waiting state
+                // Don't increment trial count, user needs to retry this trial
+                return;
+            }
+
+            // 4. Correct click when box is green ('active' state)
+            if (currentState === 'active') {
+                const endTime = Date.now();
+                const reactionTime = endTime - startTime; // Calculate reaction time in ms
+
+                reactionTimes.push(reactionTime); // Store the time
+                trialsCompleted++; // Increment trial counter
+
+                // Update displays
+                lastTimeDisplay.textContent = reactionTime;
+                trialCountDisplay.textContent = trialsCompleted;
+                messageDisplay.textContent = ''; // Clear any previous message
+
+                // Check if the test is finished
+                if (trialsCompleted >= maxTrials) {
+                    finishTest(); // Calculate and display average
+                } else {
+                    // Prepare for the next trial
+                    updateBox('waiting', `Click for Trial ${trialsCompleted + 1}`);
+                }
+                return;
+            }
+
+            // 5. Click when finished ('finished' state - restart the test)
+            if (currentState === 'finished') {
+                resetTest(); // Reset everything
+                return;
+            }
+        });
+
+        // --- Initial Setup ---
+        // No explicit initialization needed as the default state is 'initial'
+        // resetTest(); // Optionally call resetTest on load for robustness
+
+    </script>
+
+</body>
+</html>
