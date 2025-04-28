@@ -55,6 +55,7 @@
         let trialsCompleted = 0; // Counter for completed trials
         const maxTrials = 10; // Total number of trials required
         let currentState = 'initial'; // Possible states: 'initial', 'waiting', 'ready', 'active', 'finished'
+        const adjustmentTime = 200; // Time in ms to subtract for delays
 
         // --- Functions ---
 
@@ -67,7 +68,11 @@
             // Remove previous state classes
             reactionBox.classList.remove('bg-blue-500', 'bg-red-500', 'bg-green-500', 'bg-gray-500');
             statusText.textContent = text;
-            messageDisplay.textContent = ''; // Clear previous messages
+            // Don't clear the message here if the state is 'waiting' and the message is 'Too soon!'
+            if (!(state === 'waiting' && messageDisplay.textContent.includes('Too soon!'))) {
+                 messageDisplay.textContent = ''; // Clear previous messages otherwise
+            }
+
 
             // Apply new state class
             switch (state) {
@@ -109,7 +114,8 @@
          * Schedules the box to turn green after a random delay.
          */
         function scheduleStimulus() {
-            if (currentState !== 'waiting') return; // Only schedule if in the correct state
+            // Only schedule if in the 'waiting' state and not coming directly from 'Too soon!' message display
+            if (currentState !== 'waiting') return;
 
             updateBox('ready', 'Wait for green...'); // Turn box red
 
@@ -129,11 +135,18 @@
          * Calculates and displays the final average reaction time.
          */
         function finishTest() {
+            // Ensure there are times to calculate an average from
+            if (reactionTimes.length === 0) {
+                 updateBox('finished', `Test Finished! No valid trials. Click to restart.`);
+                 averageResultDisplay.textContent = `Average Time: N/A`;
+                 return;
+            }
             const sum = reactionTimes.reduce((acc, time) => acc + time, 0);
             const average = sum / reactionTimes.length;
 
             updateBox('finished', `Test Finished! Click to restart.`);
-            averageResultDisplay.textContent = `Average Time: ${average.toFixed(1)} ms`; // Show average
+            // Display average, ensuring it's not negative if adjustment caused issues
+            averageResultDisplay.textContent = `Average Time: ${Math.max(0, average).toFixed(1)} ms`;
         }
 
         // --- Event Listener ---
@@ -144,15 +157,14 @@
             // 1. Initial click to start the very first trial
             if (currentState === 'initial') {
                 updateBox('waiting', 'Click to start Trial 1'); // Move to waiting state
-                // The next click will trigger the 'waiting' state logic below
                 return;
             }
 
-            // 2. Click during 'waiting' state (to start a trial)
+            // 2. Click during 'waiting' state (to start a trial or retry after 'Too soon!')
             if (currentState === 'waiting') {
-                 // Check if it's a click after "Too soon!" message
+                 // Clear the "Too soon!" message before scheduling the next attempt
                  if (messageDisplay.textContent.includes('Too soon!')) {
-                     messageDisplay.textContent = ''; // Clear the message
+                     messageDisplay.textContent = '';
                  }
                 scheduleStimulus(); // Start the timer for the green light
                 return;
@@ -162,7 +174,8 @@
             if (currentState === 'ready') {
                 clearTimeout(timeoutId); // Cancel the scheduled green light
                 messageDisplay.textContent = 'Too soon! Click box to try again.';
-                updateBox('waiting', 'Too soon! Click to try again.'); // Go back to waiting state
+                // Update box text but keep the state as 'waiting'
+                updateBox('waiting', 'Too soon! Click to try again.');
                 // Don't increment trial count, user needs to retry this trial
                 return;
             }
@@ -170,19 +183,25 @@
             // 4. Correct click when box is green ('active' state)
             if (currentState === 'active') {
                 const endTime = Date.now();
-                const reactionTime = endTime - startTime; // Calculate reaction time in ms
+                let reactionTime = endTime - startTime; // Calculate raw reaction time in ms
 
-                reactionTimes.push(reactionTime); // Store the time
+                // *** Subtract the adjustment time ***
+                reactionTime -= adjustmentTime;
+
+                // Ensure reaction time doesn't go below zero after adjustment
+                reactionTime = Math.max(0, reactionTime);
+
+                reactionTimes.push(reactionTime); // Store the *adjusted* time
                 trialsCompleted++; // Increment trial counter
 
-                // Update displays
+                // Update displays with the *adjusted* time
                 lastTimeDisplay.textContent = reactionTime;
                 trialCountDisplay.textContent = trialsCompleted;
                 messageDisplay.textContent = ''; // Clear any previous message
 
                 // Check if the test is finished
                 if (trialsCompleted >= maxTrials) {
-                    finishTest(); // Calculate and display average
+                    finishTest(); // Calculate and display average based on adjusted times
                 } else {
                     // Prepare for the next trial
                     updateBox('waiting', `Click for Trial ${trialsCompleted + 1}`);
@@ -198,8 +217,7 @@
         });
 
         // --- Initial Setup ---
-        // No explicit initialization needed as the default state is 'initial'
-        // resetTest(); // Optionally call resetTest on load for robustness
+        // resetTest(); // Optionally call resetTest on load
 
     </script>
 
