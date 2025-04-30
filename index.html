@@ -181,7 +181,7 @@
             if (currentState === 'active') {
                 // *** Calculate reaction time using performance.now() timestamps ***
                 const reactionTime = clickTime - stimulusStartTime;
-
+                reactionTime = reactionTime - 150
                 // *** Store the accurate reaction time ***
                 reactionTimes.push(reactionTime);
                 trialsCompleted++;
